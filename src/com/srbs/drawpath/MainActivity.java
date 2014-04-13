@@ -60,10 +60,6 @@ public class MainActivity extends Activity {
 	void showSettingsPopup() {
     	dialog.show(getFragmentManager(), "tag");
     }
-    
-    void updateParams() {
-    	drawView.updateParams();
-    }
 }
 
 class SettingsDialog extends DialogFragment implements OnSeekBarChangeListener {
@@ -108,7 +104,6 @@ class SettingsDialog extends DialogFragment implements OnSeekBarChangeListener {
     		currentActivity.prefs.edit().putLong(distThresholdPrefKey, progress).commit();
     		break;
     	}
-		currentActivity.updateParams();
     }
 
 	@Override

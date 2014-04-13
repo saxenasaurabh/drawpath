@@ -1,3 +1,9 @@
+// TODO(saurabh):
+// 1. Show circles at point of touch.
+// 2. Show guide lines
+// 3. Show recommended points and snap to those points.
+// 4. Ability to draw multiple paths.
+
 package com.srbs.drawpath;
 
 import java.util.ArrayList;
@@ -7,6 +13,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -17,43 +24,139 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnTouchListener;
 
-public class DrawView extends View implements OnTouchListener {
-	long MAX_ALLOWED_DIST = 10;
-	long TIMER_WAIT_MILLISECONDS = 300;
-	
-	Timer timer;
-	List<Point> points = new ArrayList<Point>();
-    Point currentPoint;
+public class DrawView extends View implements OnTouchListener,
+		PathModelListener {
+	PathModel pathModel;
     Paint paint = new Paint();
+    MainActivity currentActivity;
     
     public DrawView(Context context, AttributeSet attrs) {
         super(context, attrs);
+        paint.setColor(Color.BLACK);
+        
+        setBackgroundColor(Color.WHITE);
         setFocusable(true);
         setFocusableInTouchMode(true);
-        setBackgroundColor(Color.WHITE);
-        this.setOnTouchListener(this);
-        paint.setColor(Color.BLACK);
         setHapticFeedbackEnabled(true);
         setLongClickable(true);
-    }
-
-    void resetTimer() {
-    	if (timer != null) {
-        	timer.cancel();
-    	}
-    	timer = new Timer();
-    	timer.schedule(new TimerTask() {
-    		public void run() {
-    			if (currentPoint != null) {
-    				points.add(currentPoint);
-        			performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-        			Log.i("Adding point", "Adding point");
-    			}
-    		}
-    	}, TIMER_WAIT_MILLISECONDS);
+        setOnTouchListener(this);
     }
     
-    float[] getPointsArray() {
+    @Override
+    public void onDraw(Canvas canvas) {
+    	initModelIfNeeded();
+		canvas.drawLines(pathModel.getPathArray(), paint);
+    }
+    
+    public boolean onTouch(View view, MotionEvent event) {
+    	initModelIfNeeded();
+    	int action = event.getActionMasked();
+    	Point point = new Point();
+        point.x = event.getX();
+        point.y = event.getY();
+        
+    	if (action == MotionEvent.ACTION_CANCEL || action == MotionEvent.ACTION_UP) {
+    		pathModel.addPoint(null);
+    		Log.i("Action Up", "Action Up");
+    	} else {
+        	pathModel.addPoint(point);
+    	}
+    	invalidate();
+        return true;
+    }
+    
+    public void onPointAdded() {
+    	performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+    }
+    
+    /**
+     * TODO(saurabh):
+     * This method is a hack because the activity is not available
+     * in the constructor. Find a way to detect when activity is
+     * ready. 
+     */
+    private void initModelIfNeeded() {
+    	if (pathModel != null) {
+    		return;
+    	}
+    	currentActivity = (MainActivity) getContext();
+        pathModel = new PathModel(currentActivity);
+        pathModel.onPointAdded(this);
+    }
+}
+
+
+interface PathModelListener {
+	void onPointAdded();
+}
+
+/**
+ * 
+ * @author saurabh
+ *
+ * This model listens for new points of touch and
+ * adds them to the path when the point of touch
+ * does not vary for too long.
+ */
+class PathModel {
+	private long MAX_ALLOWED_DIST = 10;
+	private long TIMER_WAIT_MILLISECONDS = 300;
+	
+	private final String timerWaitPrefKey;
+	private final String distThresholdPrefKey;
+	private final int timerWaitDefault;
+	private final int distThresholdDefault;
+	
+	private MainActivity currentActivity;
+	private Timer timer;
+    private Point currentPoint;
+	private ArrayList<PathModelListener> listeners =
+			new ArrayList<PathModelListener> ();
+    
+	PathModel(MainActivity activity) {
+		currentActivity = activity;
+		timerWaitPrefKey = currentActivity.getResources().getString(R.string.timer_wait_preference_key);
+		distThresholdPrefKey = currentActivity.getResources().getString(R.string.dist_threshold_preference_key);
+		timerWaitDefault = currentActivity.getResources().getInteger(R.integer.timer_wait_default);
+		distThresholdDefault = currentActivity.getResources().getInteger(R.integer.dist_threshold_default);
+		
+		currentActivity.prefs.registerOnSharedPreferenceChangeListener(
+				new SharedPreferences.OnSharedPreferenceChangeListener() {
+					@Override
+					public void onSharedPreferenceChanged(SharedPreferences sharedPreferences,
+							String key) {
+				    	TIMER_WAIT_MILLISECONDS = sharedPreferences.getLong(timerWaitPrefKey,
+				    			timerWaitDefault);
+				    	MAX_ALLOWED_DIST = sharedPreferences.getLong(distThresholdPrefKey,
+				    			distThresholdDefault);
+					}
+				});
+	}
+	
+    public List<Point> points = new ArrayList<Point>();
+    
+    public void onPointAdded(PathModelListener listener) {
+    	listeners.add(listener);
+    }
+    
+	public void addPoint(Point p) {
+		if (p == null) {
+			// Touch event cancelled or user lifted finger from screen
+			currentPoint = null;
+			timer.cancel();
+		} else {
+			if (currentPoint == null || currentPoint.distance(p) > MAX_ALLOWED_DIST) {
+	        	resetTimer();
+	        }
+    		currentPoint = p;
+		}
+	}
+	
+	/**
+	 * Returns flattened list of path points which can
+	 * be directly rendered on the canvas.
+	 */
+	public float[] getPathArray() {
     	if (points.isEmpty()) {
     		return new float[0];
     	}
@@ -79,43 +182,23 @@ public class DrawView extends View implements OnTouchListener {
     	}
     	return arr;
     }
-    
-    @Override
-    public void onDraw(Canvas canvas) {
-    	canvas.drawLines(getPointsArray(), paint);
-    }
-    
-    public boolean onTouch(View view, MotionEvent event) {
-    	int action = event.getActionMasked();
-    	Point point = new Point();
-        point.x = event.getX();
-        point.y = event.getY();
-        
-    	if (action == MotionEvent.ACTION_CANCEL || action == MotionEvent.ACTION_UP) {
-    		currentPoint = null;
-    		timer.cancel();
-    		Log.i("Action Up", "Action Up");
-    	} else {
-        	if (action == MotionEvent.ACTION_DOWN || 
-	        	currentPoint.distance(point) > MAX_ALLOWED_DIST) {
-	        	resetTimer();
-	        }
-    		currentPoint = point;
+	
+	private void resetTimer() {
+    	if (timer != null) {
+        	timer.cancel();
     	}
-    	invalidate();
-        return true;
-    }
-    
-    public void updateParams() {
-    	MainActivity currentActivity = (MainActivity) getContext();
-    	String timerWaitPrefKey = currentActivity.getResources().getString(R.string.timer_wait_preference_key);
-    	String distThresholdPrefKey = currentActivity.getResources().getString(R.string.dist_threshold_preference_key);
-    	Log.i("contains key", String.valueOf(currentActivity.prefs.contains(timerWaitPrefKey)));
-    	TIMER_WAIT_MILLISECONDS = currentActivity.prefs.getLong(timerWaitPrefKey,
-    			currentActivity.getResources().getInteger(R.integer.timer_wait_default));
-    	MAX_ALLOWED_DIST = currentActivity.prefs.getLong(distThresholdPrefKey,
-    			currentActivity.getResources().getInteger(R.integer.dist_threshold_default));
-    	Log.i("Updating params", "Wait: " + TIMER_WAIT_MILLISECONDS + " Dist: " + MAX_ALLOWED_DIST);
+    	timer = new Timer();
+    	timer.schedule(new TimerTask() {
+    		public void run() {
+    			if (currentPoint != null) {
+    				points.add(currentPoint);
+    				for(PathModelListener listener: listeners) {
+    					listener.onPointAdded();
+    				}
+        			Log.i("Adding point", "Adding point");
+    			}
+    		}
+    	}, TIMER_WAIT_MILLISECONDS);
     }
 }
 
