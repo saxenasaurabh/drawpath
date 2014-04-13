@@ -10,6 +10,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.util.AttributeSet;
 import android.util.Log;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
@@ -17,22 +18,23 @@ import android.view.View;
 import android.view.View.OnTouchListener;
 
 public class DrawView extends View implements OnTouchListener {
-	static final long MAX_ALLOWED_DIST = 10;
-	static final long TIMER_WAIT_MILLISECONDS = 200;
+	long MAX_ALLOWED_DIST = 10;
+	long TIMER_WAIT_MILLISECONDS = 300;
 	
 	Timer timer;
 	List<Point> points = new ArrayList<Point>();
-    boolean addingFirstPoint = true;
     Point currentPoint;
     Paint paint = new Paint();
     
-    public DrawView(Context context) {
-        super(context);
+    public DrawView(Context context, AttributeSet attrs) {
+        super(context, attrs);
         setFocusable(true);
         setFocusableInTouchMode(true);
+        setBackgroundColor(Color.WHITE);
         this.setOnTouchListener(this);
         paint.setColor(Color.BLACK);
         setHapticFeedbackEnabled(true);
+        setLongClickable(true);
     }
 
     void resetTimer() {
@@ -80,7 +82,6 @@ public class DrawView extends View implements OnTouchListener {
     
     @Override
     public void onDraw(Canvas canvas) {
-    	Log.i("Drawing", "Drawing");
     	canvas.drawLines(getPointsArray(), paint);
     }
     
@@ -95,20 +96,26 @@ public class DrawView extends View implements OnTouchListener {
     		timer.cancel();
     		Log.i("Action Up", "Action Up");
     	} else {
-    		if (addingFirstPoint) {
-            	points.add(point);
-            	addingFirstPoint = false;
-            	resetTimer();
-            } else {
-            	if (action == MotionEvent.ACTION_DOWN || 
-    	        	currentPoint.distance(point) > MAX_ALLOWED_DIST) {
-    	        	resetTimer();
-    	        }
-        	}
+        	if (action == MotionEvent.ACTION_DOWN || 
+	        	currentPoint.distance(point) > MAX_ALLOWED_DIST) {
+	        	resetTimer();
+	        }
     		currentPoint = point;
     	}
     	invalidate();
         return true;
+    }
+    
+    public void updateParams() {
+    	MainActivity currentActivity = (MainActivity) getContext();
+    	String timerWaitPrefKey = currentActivity.getResources().getString(R.string.timer_wait_preference_key);
+    	String distThresholdPrefKey = currentActivity.getResources().getString(R.string.dist_threshold_preference_key);
+    	Log.i("contains key", String.valueOf(currentActivity.prefs.contains(timerWaitPrefKey)));
+    	TIMER_WAIT_MILLISECONDS = currentActivity.prefs.getLong(timerWaitPrefKey,
+    			currentActivity.getResources().getInteger(R.integer.timer_wait_default));
+    	MAX_ALLOWED_DIST = currentActivity.prefs.getLong(distThresholdPrefKey,
+    			currentActivity.getResources().getInteger(R.integer.dist_threshold_default));
+    	Log.i("Updating params", "Wait: " + TIMER_WAIT_MILLISECONDS + " Dist: " + MAX_ALLOWED_DIST);
     }
 }
 

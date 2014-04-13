@@ -1,0 +1,38 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:paddingLeft="@dimen/dialog_content_horizontal_margin"
+    tools:context=".MainActivity" >
+
+    <TextView
+        android:id="@+id/timer_wait_label_text_view"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentLeft="true"
+        android:text="@string/timer_wait_label" />
+
+    <SeekBar
+        android:id="@+id/timer_wait_seek_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="@integer/timer_wait_max"
+        android:layout_below="@+id/timer_wait_label_text_view" />
+
+    <TextView
+        android:id="@+id/dist_threshold_label_text_view"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentLeft="true"
+        android:layout_below="@+id/timer_wait_seek_bar"
+        android:text="@string/dist_threshold_label" />
+
+    <SeekBar
+        android:id="@+id/dist_threshold_seek_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentLeft="true"
+        android:layout_below="@+id/dist_threshold_label_text_view"
+        android:max="@integer/dist_threshold_max" />
+
+</RelativeLayout>
