@@ -95,7 +95,6 @@ class SettingsDialog extends DialogFragment implements OnSeekBarChangeListener {
     	MainActivity currentActivity = (MainActivity) getActivity();
     	String timerWaitPrefKey = currentActivity.getResources().getString(R.string.timer_wait_preference_key);
     	String distThresholdPrefKey = currentActivity.getResources().getString(R.string.dist_threshold_preference_key);
-    	Log.i("key", String.valueOf(currentActivity.prefs.contains(timerWaitPrefKey)));
     	switch(seekBar.getId()) {
     	case R.id.timer_wait_seek_bar:
     		currentActivity.prefs.edit().putLong(timerWaitPrefKey, progress).commit();
@@ -104,6 +103,7 @@ class SettingsDialog extends DialogFragment implements OnSeekBarChangeListener {
     		currentActivity.prefs.edit().putLong(distThresholdPrefKey, progress).commit();
     		break;
     	}
+    	Log.i("", "Updating Prefs");
     }
 
 	@Override

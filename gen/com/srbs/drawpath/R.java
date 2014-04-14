@@ -40,8 +40,10 @@ public final class R {
     public static final class integer {
         public static final int dist_threshold_default=0x7f040003;
         public static final int dist_threshold_max=0x7f040001;
+        public static final int recommendation_max_dist=0x7f040005;
         public static final int timer_wait_default=0x7f040002;
         public static final int timer_wait_max=0x7f040000;
+        public static final int touch_circle_radius=0x7f040004;
     }
     public static final class layout {
         public static final int activity_main=0x7f030000;

@@ -1,8 +1,9 @@
 // TODO(saurabh):
-// 1. Show circles at point of touch.
-// 2. Show guide lines
-// 3. Show recommended points and snap to those points.
-// 4. Ability to draw multiple paths.
+// - Show guide lines
+// - Show recommended points and snap to those points.
+// - Ability to draw multiple paths.
+// - Clear the screen.
+// - Add scale
 
 package com.srbs.drawpath;
 
@@ -28,11 +29,15 @@ public class DrawView extends View implements OnTouchListener,
 		PathModelListener {
 	PathModel pathModel;
     Paint paint = new Paint();
+    Paint touchCirclePaint = new Paint();
     MainActivity currentActivity;
     
     public DrawView(Context context, AttributeSet attrs) {
         super(context, attrs);
         paint.setColor(Color.BLACK);
+        touchCirclePaint.setColor(Color.BLACK);
+        touchCirclePaint.setStyle(Paint.Style.STROKE);
+        touchCirclePaint.setStrokeWidth(3);
         
         setBackgroundColor(Color.WHITE);
         setFocusable(true);
@@ -46,18 +51,25 @@ public class DrawView extends View implements OnTouchListener,
     public void onDraw(Canvas canvas) {
     	initModelIfNeeded();
 		canvas.drawLines(pathModel.getPathArray(), paint);
+		if (pathModel.currentRecommendedPoint != null) {
+			highlightPoint(canvas, pathModel.currentRecommendedPoint);
+		} else if (pathModel.currentPoint != null) {
+			highlightPoint(canvas, pathModel.currentPoint);
+		}
+    }
+    
+    void highlightPoint(Canvas canvas, Point point) {
+    	int radius = currentActivity.getResources().getInteger(R.integer.touch_circle_radius);
+    	canvas.drawCircle(point.x, point.y, radius, touchCirclePaint);
     }
     
     public boolean onTouch(View view, MotionEvent event) {
     	initModelIfNeeded();
     	int action = event.getActionMasked();
-    	Point point = new Point();
-        point.x = event.getX();
-        point.y = event.getY();
+    	Point point = new Point(event.getX(), event.getY());
         
     	if (action == MotionEvent.ACTION_CANCEL || action == MotionEvent.ACTION_UP) {
     		pathModel.addPoint(null);
-    		Log.i("Action Up", "Action Up");
     	} else {
         	pathModel.addPoint(point);
     	}
@@ -109,9 +121,26 @@ class PathModel {
 	
 	private MainActivity currentActivity;
 	private Timer timer;
-    private Point currentPoint;
 	private ArrayList<PathModelListener> listeners =
 			new ArrayList<PathModelListener> ();
+	// Required because anonymous listeners for SharedPreferences get
+	// garbage collected.
+	private SharedPreferences.OnSharedPreferenceChangeListener prefChangeListener = 
+			new SharedPreferences.OnSharedPreferenceChangeListener() {
+		@Override
+		public void onSharedPreferenceChanged(SharedPreferences sharedPreferences,
+				String key) {
+	    	TIMER_WAIT_MILLISECONDS = sharedPreferences.getLong(timerWaitPrefKey,
+	    			timerWaitDefault);
+	    	MAX_ALLOWED_DIST = sharedPreferences.getLong(distThresholdPrefKey,
+	    			distThresholdDefault);
+		}
+	};
+	private Recommender recommender;
+	
+	public List<Point> points = new ArrayList<Point>();
+	public Point currentPoint;
+	public Point currentRecommendedPoint;
     
 	PathModel(MainActivity activity) {
 		currentActivity = activity;
@@ -119,21 +148,9 @@ class PathModel {
 		distThresholdPrefKey = currentActivity.getResources().getString(R.string.dist_threshold_preference_key);
 		timerWaitDefault = currentActivity.getResources().getInteger(R.integer.timer_wait_default);
 		distThresholdDefault = currentActivity.getResources().getInteger(R.integer.dist_threshold_default);
-		
-		currentActivity.prefs.registerOnSharedPreferenceChangeListener(
-				new SharedPreferences.OnSharedPreferenceChangeListener() {
-					@Override
-					public void onSharedPreferenceChanged(SharedPreferences sharedPreferences,
-							String key) {
-				    	TIMER_WAIT_MILLISECONDS = sharedPreferences.getLong(timerWaitPrefKey,
-				    			timerWaitDefault);
-				    	MAX_ALLOWED_DIST = sharedPreferences.getLong(distThresholdPrefKey,
-				    			distThresholdDefault);
-					}
-				});
+		currentActivity.prefs.registerOnSharedPreferenceChangeListener(prefChangeListener);
+		recommender = new Recommender(currentActivity);
 	}
-	
-    public List<Point> points = new ArrayList<Point>();
     
     public void onPointAdded(PathModelListener listener) {
     	listeners.add(listener);
@@ -143,12 +160,15 @@ class PathModel {
 		if (p == null) {
 			// Touch event cancelled or user lifted finger from screen
 			currentPoint = null;
+			currentRecommendedPoint = null;
 			timer.cancel();
 		} else {
 			if (currentPoint == null || currentPoint.distance(p) > MAX_ALLOWED_DIST) {
+				Log.i("", "Resetting timer");
 	        	resetTimer();
 	        }
-    		currentPoint = p;
+			currentPoint = p;
+    		currentRecommendedPoint = recommender.getRecommendedPoint(points, p);
 		}
 	}
 	
@@ -161,7 +181,7 @@ class PathModel {
     		return new float[0];
     	}
     	int size = 0;
-    	if (currentPoint == null) {
+    	if (currentPoint == null && currentRecommendedPoint == null) {
     		size = points.size()*4;
     	} else {
     		size = (points.size() + 1)*4;
@@ -174,7 +194,12 @@ class PathModel {
     		arr[index*4 + 2] = points.get(index + 1).x;
     		arr[index*4 + 3] = points.get(index + 1).y;
     	}
-    	if (currentPoint != null) {
+    	if (currentRecommendedPoint != null) {
+	    	arr[index*4 + 0] = points.get(index).x;
+			arr[index*4 + 1] = points.get(index).y;
+			arr[index*4 + 2] = currentRecommendedPoint.x;
+			arr[index*4 + 3] = currentRecommendedPoint.y;
+    	} else if (currentPoint != null) {
 	    	arr[index*4 + 0] = points.get(index).x;
 			arr[index*4 + 1] = points.get(index).y;
 			arr[index*4 + 2] = currentPoint.x;
@@ -190,8 +215,8 @@ class PathModel {
     	timer = new Timer();
     	timer.schedule(new TimerTask() {
     		public void run() {
-    			if (currentPoint != null) {
-    				points.add(currentPoint);
+    			if (currentRecommendedPoint != null) {
+    				points.add(currentRecommendedPoint);
     				for(PathModelListener listener: listeners) {
     					listener.onPointAdded();
     				}
@@ -204,6 +229,10 @@ class PathModel {
 
 class Point {
     float x, y;
+    public Point(float x, float y) {
+    	this.x = x;
+    	this.y = y;
+    }
     double distance(Point target) {
     	double x2 = (target.x-x)*(target.x-x);
     	double y2 = (target.y-y)*(target.y-y);
