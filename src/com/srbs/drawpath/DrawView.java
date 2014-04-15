@@ -3,6 +3,7 @@
 // - Show recommended points and snap to those points.
 // - Ability to draw multiple paths.
 // - Clear the screen.
+// - Undo the previous point.
 // - Add scale
 
 package com.srbs.drawpath;
@@ -17,7 +18,9 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.DashPathEffect;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.HapticFeedbackConstants;
@@ -30,7 +33,9 @@ public class DrawView extends View implements OnTouchListener,
 	PathModel pathModel;
     Paint paint = new Paint();
     Paint touchCirclePaint = new Paint();
+    Paint guideLinePaint = new Paint();
     MainActivity currentActivity;
+    boolean showGuide = true;
     
     public DrawView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -38,6 +43,9 @@ public class DrawView extends View implements OnTouchListener,
         touchCirclePaint.setColor(Color.BLACK);
         touchCirclePaint.setStyle(Paint.Style.STROKE);
         touchCirclePaint.setStrokeWidth(3);
+        guideLinePaint.setColor(Color.BLACK);
+        guideLinePaint.setStyle(Paint.Style.STROKE);
+        guideLinePaint.setPathEffect(new DashPathEffect(new float[]{2, 5}, 0));
         
         setBackgroundColor(Color.WHITE);
         setFocusable(true);
@@ -51,10 +59,25 @@ public class DrawView extends View implements OnTouchListener,
     public void onDraw(Canvas canvas) {
     	initModelIfNeeded();
 		canvas.drawLines(pathModel.getPathArray(), paint);
+		Point pointToHighlight = null;
 		if (pathModel.currentRecommendedPoint != null) {
-			highlightPoint(canvas, pathModel.currentRecommendedPoint);
+			pointToHighlight = pathModel.currentRecommendedPoint;
 		} else if (pathModel.currentPoint != null) {
-			highlightPoint(canvas, pathModel.currentPoint);
+			pointToHighlight = pathModel.currentPoint;
+		}
+		if (pointToHighlight != null) {
+			highlightPoint(canvas, pointToHighlight);
+			// Draw guide lines
+			if (showGuide) {
+				Path path = new Path();
+				path.moveTo(0, pointToHighlight.y);
+				path.lineTo(canvas.getWidth(), pointToHighlight.y);
+				path.moveTo(pointToHighlight.x, 0);
+				path.lineTo(pointToHighlight.x, canvas.getHeight());
+				path.lineTo(canvas.getWidth(), pointToHighlight.y);
+				
+				canvas.drawPath(path, guideLinePaint);
+			}
 		}
     }
     
@@ -232,6 +255,9 @@ class Point {
     public Point(float x, float y) {
     	this.x = x;
     	this.y = y;
+    }
+    public Point() {
+    	x = y = 0;
     }
     double distance(Point target) {
     	double x2 = (target.x-x)*(target.x-x);
